@@ -1,0 +1,237 @@
+<html>
+	<head>
+		<title>PETROLEUM</title>
+	</head>
+	<body>
+		<div id="maindiv"></div>
+	</body>
+	<script type="text/javascript">
+		function getHTMLElementsFromString(string){
+			const template = document.createElement('template');
+			string = string.trim();
+			template.innerHTML = string;
+			return template.content.children;
+		}
+
+		const gamestate = {
+			resources: {
+			},
+			production: {
+				pump: 10
+			}
+		};
+
+		const productionDefinition = {
+			pump: {
+				name: 'Petrol Pump Station',
+				cost: 35,
+				inputs: [
+					{item: 'petrol', cost: 0}
+				],
+				outputs: [
+					{item: 'petrol', cost: 1}
+				]
+			},
+			basicDistallation0: {
+				name: 'Basic Petrol Distillation',
+				cost: 100,
+				inputs: [
+					{item: 'petrol', cost: 5}
+				],
+				outputs: [
+					{item: 'crude', cost: 4},
+					{item: 'residualFuel', cost: 1}
+				]
+			},
+			basicDistallation1: {
+				name: 'Advanced Petrol Distillation',
+				cost: 120,
+				inputs: [
+					{item: 'petrol', cost: 1},
+					{item: 'crude', cost: 5},
+				],
+				outputs: [
+					{item: 'crude', cost: 4},
+					{item: 'residualFuel', cost: 2}
+				]
+			},
+			advancedDistillation0: {
+				name: 'Residual Fuel Distillation',
+				cost: 1000,
+				inputs: [
+					{item: 'residualFuel', cost: 5}
+				],
+				outputs: [
+					{item: 'residualFuel', cost: 2},
+					{item: 'heavyGas', cost: 2},
+					{item: 'diesel', cost: 1}
+				]
+			},
+		};
+
+		const resourceDefinition = {
+			money: {
+				name: 'Money',
+				sell: 0,
+			},
+			petrol: {
+				name: 'Petrol',
+				sell: 1,
+			},
+			crude: {
+				name: 'Crude Oil',
+				sell: 2,
+			},
+			residualFuel: {
+				name: 'Residual Fuel',
+				sell: 5,
+			},
+			heavyGas: {
+				name: 'Heavy Gas',
+				sell: 8,
+			},
+			diesel:{
+				name: 'Diesel Fuel',
+				sell: 10,
+			},
+		};
+
+		// Add all possible configured stuff to the gamestate
+		for (const [name, item] of Object.entries(productionDefinition)){
+			// Check for undefined so we can manually prime in gamestate
+			// Might also come in handy for saving/loading later
+			if (gamestate.production[name] === undefined){
+				gamestate.production[name] = 0;
+			}
+		}
+		for (const [name, item] of Object.entries(resourceDefinition)){
+			// Check for undefined so we can manually prime in gamestate
+			// Might also come in handy for saving/loading later
+			if (gamestate.resources[name] === undefined){
+				gamestate.resources[name] = 0;
+			}
+		}
+
+		// Loop over all the production items adding a button to buy each
+		for (const [name, item] of Object.entries(productionDefinition)){
+			const userFriendlyName = item.name;
+			const marketRate = item.cost;
+			document.querySelector('body').appendChild(
+				getHTMLElementsFromString(
+				`<button id="buy-${name}">Buy ${userFriendlyName}: -$${marketRate}</button>`
+				)[0]
+			);
+			// Add an event listener for each
+			document.querySelector(`#buy-${name}`).addEventListener('click', () => {
+				if (gamestate.resources.money >= marketRate){
+					gamestate.resources.money -= marketRate;
+					gamestate.production[name] += 1;
+				}
+				updateVisuals();
+			});
+		}
+		document.querySelector('body').appendChild(
+			getHTMLElementsFromString(
+			`<br />`
+			)[0]
+		);
+		document.querySelector('body').appendChild(
+			getHTMLElementsFromString(
+			`<br />`
+			)[0]
+		);
+
+		// Loop over all the resource items adding a button to sell each
+		for (const [name, item] of Object.entries(resourceDefinition)){
+			// Don't let people sell money!
+			if (name == 'money'){
+				continue;
+			}
+			const userFriendlyName = item.name;
+			const marketRate = item.sell;
+			document.querySelector('body').appendChild(
+				getHTMLElementsFromString(
+				`<button id="sell-${name}">Sell all ${userFriendlyName}: +$${marketRate}</button>`
+				)[0]
+			);
+			// Add an event listener for each
+			document.querySelector(`#sell-${name}`).addEventListener('click', () => {
+				gamestate.resources.money += marketRate * gamestate.resources[name];
+				gamestate.resources[name] = 0;
+				updateVisuals();
+			});
+		}
+
+		// TODO: Add a way to sell your resources
+
+		// Start the main game loop
+		setInterval(() => {
+			// Loop over the production resources we have in the gamestate
+			for (const [name, item] of Object.entries(productionDefinition)){
+				// Skip if we don't have the production
+				if (gamestate.production[name] == 0){
+					continue;
+				}
+
+				// We want to consume inputs once per tick per production unit
+				// Below code doesn't allow us to consume more than 1 input
+
+				for (let a = 0; a < gamestate.production[name]; a++){
+					// Check to see if we can afford all the consumable costs
+					let foundAll = true;
+					item.inputs.forEach(inputItem => {
+						if (gamestate.resources[inputItem.item] < inputItem.cost){
+							foundAll = false;
+						}
+					});
+					// If we did find all the requirements, make the transaction happen
+					if (foundAll){
+						item.inputs.forEach(inputItem => {
+							gamestate.resources[inputItem.item] -= inputItem.cost;
+						});
+						item.outputs.forEach(outputItem => {
+							gamestate.resources[outputItem.item] += outputItem.cost;
+						});
+					}
+				}
+
+			}
+
+			updateVisuals();
+		}, 1000);
+		updateVisuals();
+
+		// TODO: Show how much resources are consumed when purchasing a production
+		// TODO: Show net consumption per second per production
+		// TODO: Generally better organization of the UI.
+		// TODO: Use components for rendering PLZ
+		function updateVisuals(){
+			document.querySelector('#maindiv').innerHTML = '';
+			elStrings = [];
+
+			// Print out the current total of each item/production
+			for (const [name, item] of Object.entries(gamestate.production)){
+				const userFriendlyName = productionDefinition[name].name;
+				elStrings.push(
+					`<p>${userFriendlyName}: ${item}</p>`
+				);
+			}
+			for (const [name, item] of Object.entries(gamestate.resources)){
+				const userFriendlyName = resourceDefinition[name].name;
+				elStrings.push(
+					`<p>${userFriendlyName}: ${item}</p>`
+				);
+			}
+
+			// Finally append them to the dom
+			elStrings.forEach(elString => {
+				document.querySelector('#maindiv').appendChild(
+					getHTMLElementsFromString(elString)[0]
+				);
+			});
+		}
+
+
+
+	</script>
+</html>
